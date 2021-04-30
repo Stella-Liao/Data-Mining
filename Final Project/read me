@@ -1,0 +1,4 @@
+This project is conducted by Sean Knipe and Stella Liao, Sean is responsible for linear regression part and Stella is resposible for non-linear regression part.
+data cleaning.R file is the codes used to tidy data
+random forest regression.R file is the codes used to build random forest regression model
+neural network regression.R file is the codes used to build neural network regression model
