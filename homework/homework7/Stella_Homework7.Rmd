@@ -1,0 +1,125 @@
+---
+title: "STA 545 Statistical Data Mining I, Fall 2020"
+subtitle: "Homework 7"
+author: "Stella Liao"
+date: "October 28, 2020"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+(a)
+With a one-unit increase in X~1~(hours studied), the expected change in log odds is 0.05(which is $\beta$~1~).
+(b)
+When we plug in the equation, we could get that
+$$p = \frac{e^{-6+0.05\times 40+3.5}}{1+e^{-6+0.05\times 40+3.5}}$$
+```{r}
+exp(-6+0.05*40+3.5)/(1+exp(-6+0.05* 40+3.5))
+```
+Therefore, the probability that a student who studies for 40 hours and has an undergrad GPA of 3.5 gets an A in the class is about 37.75%
+
+(c)
+In this case, we have that 
+$$p = \frac{e^{-6+0.05X_{1} +3.5}}{1+e^{-6+0.050.05X_{1}+3.5}} = 0.8$$ and then,
+$$e^{-6+0.05X_{1} +3.5} = 4$$
+```{r}
+(log(4)-3.5+6)/0.05
+```
+Hence, the student in part (a) need to study about 77.73 hours to have a 80% chance of getting an A in the class.
+
+## Problem 2
+### (a)
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(ISLR) 
+library(dplyr)
+
+data('Auto')
+myAuto <- Auto %>%
+  mutate(mpg01 = (ifelse(mpg > median(mpg), 1, 0)))
+
+```
+
+### (b)
+```{r}
+cor(myAuto[,-9])
+pairs(myAuto)
+```
+
+From above, `cylinders`, `weight`, `displacement`, and `horsepower` might be useful to predict `mpg01`. To be specific, `mpg01` seems to have a strong inverse relationship with them. 
+
+### (c)
+```{r}
+set.seed(50321222)
+#split the 'myAuto' data randomly split by half as training data and testing data
+train.num=sample(1:nrow(myAuto),.5*nrow(myAuto),replace=FALSE)
+Auto.train = myAuto[train.num,]
+Auto.test = myAuto[-train.num,]
+```
+
+### (d) LDA  
+1)
+```{r echo=TRUE, warning=FALSE}
+#remain predictors related to mpg01 most
+Auto.train <- Auto.train %>%
+  dplyr::select(cylinders, weight, displacement, horsepower, mpg01)
+Auto.test <- Auto.test %>%
+  dplyr::select(cylinders, weight, displacement, horsepower, mpg01)
+```  
+
+2)
+```{r}
+library(MASS)
+lda.fit = lda(mpg01 ~ .,data = Auto.train)
+lda.pred = predict(lda.fit, Auto.test)
+#the test error of lda
+mean(lda.pred$class != Auto.test$mpg01)
+```  
+
+### (e) QDA
+```{r}
+qda.fit = qda(mpg01 ~ ., data = Auto.train)
+qda.pred = predict(qda.fit, Auto.test)
+#the test error of qda
+mean(qda.pred$class != Auto.test$mpg01)
+```  
+
+### (f) Logistic Regression
+```{r}
+glm.fit = glm(mpg01 ~ ., data = Auto.train, family = binomial)
+glm.probs = predict(glm.fit, Auto.test, type = "response")
+glm.pred = rep(0, length(glm.probs))
+glm.pred[glm.probs > 0.5] = 1
+#the test error of logistic regression
+mean(glm.pred != Auto.test$mpg01)
+```  
+
+### (g) KNN
+```{r}
+library(class)
+train.X = Auto.train[,-5]
+test.X = Auto.test[,-5]
+
+# KNN(k=1)
+knn.pred = knn(train.X, test.X, Auto.train[,5], k = 1)
+#the test error of knn(k=1)
+mean(knn.pred != Auto.test$mpg01)
+
+# KNN(k=10)
+knn.pred = knn(train.X, test.X, Auto.train[,5], k = 10)
+#the test error of knn(k=10)
+mean(knn.pred != Auto.test$mpg01)
+
+# KNN(k=100)
+knn.pred = knn(train.X, test.X, Auto.train[,5], k = 100)
+#the test error of knn(k=100)
+mean(knn.pred != Auto.test$mpg01)
+```
+
+According to the test errors, when K = 100, it has lowest test error value and thus has best performance among them.
+
+

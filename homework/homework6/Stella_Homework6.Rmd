@@ -1,0 +1,151 @@
+---
+title: "STA 545 Statistical Data Mining I, Fall 2020"
+subtitle: "Homework 6"
+author: "Stella Liao"
+date: "October 14, 2020"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+![](/Users/stella_liao/Nutstore\ Files/data\ mining/homework/homework6/question1.jpg)
+
+## Problem 2
+![](/Users/stella_liao/Nutstore\ Files/data\ mining/homework/homework6/question2.jpg)
+
+## Problem 3
+### 1)prepare data
+```{r}
+library(dplyr)
+train <- as.data.frame(read.table('zip.train.gz'))%>%
+  filter(V1 %in% c(2, 3, 4))
+
+x_train <- train %>%
+  select(-V1)
+
+y_train <- train%>%
+  select(V1)
+
+test <- as.data.frame(read.table('zip.test.gz'))%>%
+  filter(V1 %in% c(2, 3, 4))
+
+x_test <- test%>%
+  select(-V1)
+
+y_test <- test%>%
+  select(V1)
+```
+
+### 2)My own function to realize LDA method
+
+In this function, it will return the training error, the confusion matrix for training data, and the prediction result for test data.
+
+```{r}
+myLDA <- function(X, y, newx){
+  require(dplyr)
+  k = unique(y)
+  p = c()
+  for (i in 1:nrow(k)) {
+    p[i] = (nrow(subset(y,y[1] == k[i,1])))/nrow(y)
+  }
+  
+  # calculate covariance matrix to get C
+  ## store each group
+  cov_list <- list()
+  x_mat_list <- list()
+  num_class = nrow(k)
+  train <- cbind(X,y)
+  lstCol = ncol(train)
+  for (i in 1:num_class){
+    cl = k[i,1]
+    tmp1 = data.matrix(subset(train, train[lstCol] == cl))
+    x_mat = tmp1[,-lstCol]
+    x_mat_list[[i]] <- x_mat 
+    cov_list[[i]] <- cov(x_mat)
+  }
+  num_feature = ncol(X)
+  C = matrix(0, nrow = num_feature, ncol = num_feature) 
+  tmp2 = c()
+  for(a in 1:num_feature){
+    for(b in 1:num_feature){
+      for(i in 1:num_class){
+        tmp2[i] = p[i] * cov_list[[i]][a,b]
+      }
+      C[a,b] = sum(tmp2)
+    }
+  }
+  C_inv = solve(C)
+  
+  #calculate mu
+  mu_list <- list()#matrix(0, nrow = num_class, ncol = num_feature)
+  for(i in 1:num_class){
+    mu = t(as.matrix(colSums(x_mat_list[[i]]))/nrow(x_mat_list[[i]]))
+    mu_list[[i]] <- mu
+  }
+  
+  #traning data
+  num_obj = nrow(train)
+  f = matrix(0, nrow = num_obj, ncol = num_class)
+  for (i in 1:num_obj){
+    #acquire each object
+    obj = t(as.matrix(X[i,]))
+    for(j in 1:num_class){
+      mu_j = mu_list[[j]]
+      tmp3 = mu_j %*% C_inv %*% obj - (mu_j %*% C_inv %*% t(mu_j)) * 0.5 + log(p[j])
+      f[i,j] = tmp3
+    }
+  }
+  
+  train2 <- cbind(train,f)
+  newlstCol = ncol(train2) 
+  train3 <- transform(train2, 
+                      prediction = (t(k[1]))[max.col(train2[(newlstCol-num_class+1):newlstCol])])  
+  index_y = newlstCol - num_class
+  training_error = mean(train3[index_y] != train3$prediction)
+  
+  #testing data
+  num_obj2 = nrow(newx)
+  f2 = matrix(0, nrow = num_obj2, ncol = num_class)
+  for (i in 1:num_obj2){
+    #acquire each object in newx data set
+    obj2 = t(as.matrix(newx[i,]))
+    for(j in 1:num_class){
+      mu_j = mu_list[[j]]
+      tmp3 = mu_j %*% C_inv %*% obj2 - (mu_j %*% C_inv %*% t(mu_j)) * 0.5 + log(p[j])
+      f2[i,j] = tmp3
+    }
+  }
+  
+  newx2 <- cbind(newx,f2)
+  newlstCol2 = ncol(newx2) 
+  newx3 <- transform(newx2, 
+                     prediction = (t(k[1]))[max.col(newx2[(newlstCol2 - num_class + 1):newlstCol2])]) 
+
+  output <- list("training error" = training_error, 
+                 "confusion matrix for training data" = table(train3$prediction,train3[,index_y]),
+                 "prediction for newx" = newx3$prediction)
+  output
+}
+
+#result of myLDA function
+res <- myLDA(x_train, y_train, newx = x_test)
+#training error
+res$`training error`
+#confusion matrix for training data
+res$`confusion matrix for training data`
+
+```
+After we implement `myLDA()` function, we could use the prediction result fot `newx` to calculate test error
+```{r}
+#calculate test error
+test_error = mean(y_test$V1 != res$`prediction for newx`)
+#test error
+test_error
+#confusion matrix for test data
+table(res$`prediction for newx`,y_test$V1)
+```

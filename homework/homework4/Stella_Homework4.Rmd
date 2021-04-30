@@ -1,0 +1,202 @@
+---
+title: "STA 545 Statistical Data Mining I, Fall 2020"
+subtitle: "Homework 4"
+author: "Stella Liao"
+date: "September 30, 2020"
+output:
+  pdf_document:
+            latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. In this exercise, we will predict the number of applications received using the other variables in the College data set. Please install the ISLR R package to download this data set.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
+library(ISLR)
+library(glmnet)
+library(pls)
+data(College)
+```
+
+### (a) (5 points) This data set has 777 observations. Please randomly split the data set into a training set (500 observations) and a test set (277 observations). Please use the set.seed() function in this step so that you can reproduce your following analysis results.    
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+set.seed(123)
+train.num <- sample(777, size = 500, replace = FALSE)
+train.College <- College[train.num,]
+test.College <- College[-train.num,]
+```
+
+### (b) (15 points) Fit a linear model using least squares on the training set. Report the estimated regression coeﬃcients and the test error obtained.
+
+The estimated regression coeﬃcients and the test error are shown in the output of the chunk below.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+lm.OLS = lm(Apps ~ ., train.College)
+preds.OLS <- predict(lm.OLS, test.College)
+
+#the estimated regression coeficients
+coef(lm.OLS) 
+
+#the test error
+MSE <- mean((preds.OLS - test.College$Apps)^2)
+MSE  
+```
+
+### (c) (15 points) If we ﬁt the ridge regression model on the training set considering all possible values of the tuning parameter, which ridge regression model has the lowest training error? If we ﬁt the PCR model on the training set considering all possible values of the tuning parameter M, which PCR model has the lowest training error? Are these two models always the same as the linear model in part (b)? Why?
+
+1) ridge regression model   
+
+In order to consider the full range of $\lambda$ in a ridge regression, we create a grid to contain the values ranging from 10^-2^ to 10^10^; ^[1]^ 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+X.College <- model.matrix(Apps ~ .,train.College)
+grid <- 10 ^ seq(10, -2, length = 100)
+
+ridge.mod <- glmnet(X.College,
+                    train.College$Apps, 
+                    alpha = 0, 
+                    lambda = grid,
+                    thresh = 1e-12)
+
+training.errors.ridge <- c()
+for (i in 1:length(grid)){
+  preds.ridge <- predict(ridge.mod,
+                         s = grid[i],
+                         newx = X.College)
+  training.errors.ridge[i] <- mean((preds.ridge - train.College$Apps)^2)
+}
+
+lowest.training.error.ridge <- min(training.errors.ridge)
+lowest.training.error.ridge
+lowest.lambda <- grid[which.min(training.errors.ridge)]
+lowest.lambda
+```
+Therefore, in the ridge regression model, when $\lambda$ is 0.01, we have the lowest training error which is 915123.1.
+
+2) PCR model
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+M <- c()
+training.errors.PCR <- c()
+for (i in 1:17){
+  M[i] <- i
+  fit.pcr <- pcr(Apps ~ .,
+               data = train.College,
+               scale = TRUE,
+               ncomp = i)
+  pred.pcr <- predict(fit.pcr, 
+                      train.College, 
+                      ncomp = i)
+
+  training.errors.PCR[i] <- mean((pred.pcr - train.College$Apps)^2)
+}
+
+lowest.training.error.PCR <- min(training.errors.PCR)
+lowest.M <- which.min(training.errors.PCR)
+
+lowest.M
+lowest.training.error.PCR
+
+```
+Therefore, in the PCR model, when M is 17, we have the lowest training error which is 915123.1. 
+
+3) the coeefficients from different models
+
+```{r}
+coefficient.OLS <- as.data.frame(coef(lm.OLS))
+coefficient.ridge <- predict(ridge.mod, s = lowest.lambda, type = "coefficient")
+coefficient.OLS
+coefficient.ridge
+```
+
+In summary, we could find that the lowest training errors in the ridge regression model and the PCR model are same but are different from the test error in part (b). I think the main reason of the difference is because in part(b), we used test data to calculate the test error; while in part(c), we used train data to calculate the training error. And actually the coefficients from the OLS and ridge regression are similar. And in the PCR model, because we finally chose M = 17, meaning we use all predictors to predict the response and in the OLS, we also consider the all predictors.
+
+### (d) (5 points) Further split the training set into two parts randomly: set A (250 observations) and set B (250 observations). Please use the set.seed() function in this step so that you can reproduce your following analysis results.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+set.seed(123)
+set.num <- sample(500, size = 250, replace = FALSE)
+set.A <- College[set.num,]
+set.B <- College[-set.num,]
+```
+
+### (e) (15 points) Fit a ridge regression model on the set A, with the tuning parameter $\lambda$ chosen by the set B. Report the estimated regression coeﬃcients and the test error obtained.
+
+In order to find the ridge regression model with the lowest training errors, we could use cross-validation to find the best $\lambda$ by applying the function `cv.glmnet()`.^[1]^
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+X.set.A <- model.matrix(Apps ~ .,set.A)
+X.set.B <- model.matrix(Apps ~ .,set.B)
+test.matrix.College <- model.matrix(Apps ~ .,test.College)
+grid <- 10 ^ seq(10, -2, length = 100)
+
+cv.ridge <- cv.glmnet(X.set.B,
+                      set.B$Apps, 
+                      alpha = 0, 
+                      lambda = grid,
+                      thresh = 1e-12)
+set.seed(1)
+bestlambda.B <- cv.ridge$lambda.min
+bestlambda.B
+
+ridge.mod2 <- glmnet(X.set.A,
+                     set.A$Apps, 
+                     alpha = 0, 
+                     lambda = bestlambda.B,
+                     thresh = 1e-12)
+
+preds.ridge2 <- predict(ridge.mod2,
+                        s = bestlambda.B,
+                        newx = test.matrix.College)
+#test error in ridge model
+test.error.ridge <- mean((preds.ridge2 - test.College$Apps)^2)
+test.error.ridge
+#the coefficients of ridge model
+coef(ridge.mod2)
+```
+
+### (f) (15 points) Fit a PCR model on the set A, with the parameter M chosen by the set B. Report the value of M selected by the set B, the estimated regression coeﬃcients of the original input variables, and the test error obtained.
+
+In PCR model, we still use cross validation to choose M by setting the argument `validation` equal to `"CV"`. And we choose the M which could make the cross validation error lowest, which will be shown in the output of `summary(fit.pcr2)`.^[2]^
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+fit.pcr2 <- pcr(Apps ~ .,
+                data = set.B,
+                scale = TRUE,
+                validation = "CV")
+validationplot(fit.pcr2,val.type = "MSEP")
+summary(fit.pcr2)
+```
+
+According to the output of `summary(fit.pcr2)`, we find that when `ncomp` = 17, the cross validation error is lowest. 
+
+```{R}
+fit.pcr3 <- pcr(Apps ~ .,
+                data = set.A,
+                ncomp = 17)
+
+pred.pcr2 <- predict(fit.pcr3, 
+                     test.College, 
+                     ncomp = 17)
+
+# test error in PCR model
+test.error.PCR <- mean((pred.pcr2 - test.College$Apps)^2)
+test.error.PCR
+#the coefficients of the original outputs
+as.data.frame(fit.pcr3$coefficients[,,17])
+```
+
+## Problem 2
+![](/Users/stella_liao/Nutstore\ Files/data\ mining/homework/homework4/question2.jpg)
+
+## Problem 3 
+![](/Users/stella_liao/Nutstore\ Files/data\ mining/homework/homework4/question3.jpg)
+
+## References
+[1] 6.5 Lab 2: Ridge Regression and the Lasso, Chapter 6 Linear Model Selection and regularization  
+[2] 6.6 Lab 3: PCR and PLS Regression, Chapter 6 Linear Model Selection and regularization
+

@@ -1,0 +1,199 @@
+---
+title: "STA 545 Statistical Data Mining I, Fall 2020"
+subtitle: "Homework 9"
+author: "Stella Liao"
+date: "November 18, 2020"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+$D_P$ denote the parent node; $D_{left}$ denote the left child node; $D_{right}$ denote the left child node.  
+
+1) Entropy as impurity measure, calculate Information Gain($IG_H$)     
+a. Split 1
+$$IG_H(D_P) = - \frac{7}{10} \times \log_2(\frac{7}{10}) - \frac{3}{10} \times \log_2(\frac{3}{10})$$
+```{r}
+dp = -7/10*log2(7/10)-3/10*log2(3/10)
+dp
+```
+$$IG_H(D_{Left}) = - 1 \times \log_2(1) - 0 = 0$$
+$$IG_H(D_{right}) = - \frac{4}{7} \times \log_2(\frac{4}{7}) - \frac{3}{7} \times \log_2(\frac{3}{7})$$
+```{r}
+dr_1 = -4/7*log2(4/7)-3/7*log2(3/7)
+dr_1
+```
+$$IG_H = IG_H(D_P) - \frac{3}{10} \times IG_H(D_{Left}) - \frac{7}{10} \times IG_H(D_{right})$$
+```{r}
+print(dp - 0 - 7/10 * dr_1)
+```
+
+b. Split 2
+$$IG_H(D_{Left}) = - \frac{2}{3} \times \log_2(\frac{2}{3}) - \frac{1}{3} \times \log_2(\frac{1}{3})$$
+```{r}
+dl_2 = -2/3*log2(2/3)-1/3*log2(1/3)
+dl_2
+```
+$$IG_H(D_{right}) = - \frac{5}{7} \times \log_2(\frac{5}{7}) - \frac{2}{7} \times \log_2(\frac{2}{7})$$
+```{r}
+dr_2 = -5/7*log2(5/7)-2/7*log2(2/7)
+dr_2
+```
+$$IG_H = IG_H(D_P) - \frac{3}{10} \times IG_H(D_{Left}) - \frac{7}{10} \times IG_H(D_{right})$$
+```{r}
+print(dp - 3/10 * dl_2 - 7/10 * dr_2)
+```
+
+2) Missclassification error as impurity measure, calculate Information Gain($IG_E$) 
+a. Split 1
+$$IG_E(D_P) = 1 - \frac{7}{10} = \frac{3}{10}$$
+$$IG_E(D_{Left}) = 1 - \frac{3}{3} = 0$$
+$$IG_E(D_{right}) = 1 - \frac{4}{7} = \frac{3}{7}$$
+$$IG_E = IG_E(D_P) - \frac{3}{10} \times IG_E(D_{Left}) - \frac{7}{10} \times IG_E(D_{right}) = \frac{3}{10} - \frac{3}{10} \times 0 - \frac{7}{10} \times \frac{3}{7} = 0  $$
+b. Split 2
+$$IG_E(D_{Left}) = 1 - \frac{2}{3} = \frac{1}{3}$$
+$$IG_E(D_{right}) = 1 - \frac{5}{7} = \frac{2}{7}$$
+$$IG_E = IG_E(D_P) - \frac{3}{10} \times IG_E(D_{Left}) - \frac{7}{10} \times IG_E(D_{right}) = \frac{3}{10} - \frac{3}{10} \times \frac{1}{3} - \frac{7}{10} \times \frac{2}{7} = 0 $$
+
+Therefore, in terms of Entropy, we prefer Split 1, since the information gain of Split 1(0.1916) is greater than that of Split 2(0.0016); in terms of Misclassification error, both of the splits are a good choice, since the information gain of them are equal.
+
+## Problem 2
+(a)
+```{r}
+library(ISLR)
+
+set.seed(2)
+train.num <- sample(nrow(OJ), 800)
+OJ.train <- OJ[train.num , ]
+OJ.test <- OJ[-train.num ,]
+```
+
+(b)
+```{r}
+library(tree)
+tree.OJ <- tree(Purchase ~., OJ.train)
+summary(tree.OJ)
+```
+The summary above shows that `LoyalCH` and  `PriceDiff` are the most important variables to determine whether the customer purchased Citrus Hill or Minute Maid Orange Juice; there are 9 terminal nodes in this tree model and the training error rate is 15.88%.
+
+(c)
+
+```{r}
+tree.OJ
+```
+According to the last terminal node, we could see that when `LoyalCH` is greater than 0.738, then the customer would be almost always(about 97.44%) purchases Citrus Hill orange juice. In other words, if the loyal customers stay more loyal and it is more likely they will always purchase the juice whose brand they support.
+
+(d)
+```{r}
+plot(tree.OJ, main='Decision Tree')
+text(tree.OJ, pretty=0)
+```
+
+According to the tree, `LoyalCh` is the most important variable in the tree. If `LoyalCh`(customer brand loyalty for Citrus Hill Orange Juice) is smaller than 0.035, then the tree predicts that the customer will choose Minute Maid Orange Juice(MM); while if `LoyalCh` is greater than 0.74, the tree predicts that the customer will choose Citrus Hill Orange Juice(CH); and `PriceDiff` shows its power when `LoyalCh` is between 0.035 and 0.74, for example, when `LoyalCh` is between 0.035 and 0.281, if `PriceDiff` is smaller than 0.05, the tree model will predict that the customer will choose Minute Maid Orange Juice(MM).
+
+(e)
+```{r}
+pred.OJ <- predict(tree.OJ, OJ.test, type='class')
+
+#confusion matrix
+table(pred.OJ, OJ.test$Purchase)
+
+#test error rate
+mean(pred.OJ != OJ.test$Purchase)
+```
+
+(f)
+```{r}
+cv.OJ <- cv.tree(tree.OJ, FUN = prune.misclass)
+cv.OJ
+```
+
+(g)
+```{r}
+plot(cv.OJ$size, cv.OJ$dev, type = "b", xlab = "Tree size", ylab = "Cross Validation Error")
+```
+
+(h)
+Based on the result of `cv.oj` and the plot above, we could see the cross validation error is smallest when the size is equal to 9 or 7. And to make the model simpler, we finally chose 7 as the optimal tree size.
+
+(i)
+```{r}
+prune.tree.OJ <- prune.misclass(tree.OJ, best = 7)
+summary(prune.tree.OJ)
+```
+
+(j)
+```{r}
+pred.prune.train.OJ = predict(prune.tree.OJ, OJ.train, type='class')
+prune.train.error <- mean(pred.prune.train.OJ != OJ.train$Purchase)
+
+# training error of pruned tree
+prune.train.error
+```
+The training error of the original tree is 15.88% and that of the pruned tree is around 15.88%, so there is no difference between them in this case.
+
+(k)
+```{r}
+pred.prune.test.OJ= predict(prune.tree.OJ, OJ.test, type='class')
+prune.test.error <- mean(pred.prune.test.OJ != OJ.test$Purchase)
+
+# test error of pruned tree
+prune.test.error
+
+```
+
+The test error of the original tree is about 19.26% and that of the pruned tree is around 19.26%, so there is no difference between them in this case.
+
+## Probelm 3
+
+1) iris dataset
+```{r}
+library(datasets)
+data(iris)
+set.seed(50321222)
+train.num2=sample(1:nrow(iris),.7*nrow(iris),replace=FALSE)
+iris.train = iris[train.num2,]
+iris.test = iris[-train.num2,]
+```
+
+2)random forest model
+```{r}
+library(randomForest)
+rf.iris <- randomForest(Species~.,data=iris.train,ntree=10,proximity=TRUE)
+rf.pred.iris<-predict(rf.iris,newdata=iris.test)
+table(rf.pred.iris, iris.test$Species)
+
+rf.accuracy <- sum(rf.pred.iris == iris.test$Species)/length(iris.test$Species)
+
+rf.accuracy
+```
+
+3)LDA
+```{r}
+library(MASS)
+lda.iris <- lda(Species ~ ., data = iris.train)
+lda.pred.iris <- predict(lda.iris,newdata = iris.test)
+
+table(lda.pred.iris$class, iris.test$Species)
+
+lda.accuracy <- sum(lda.pred.iris$class == iris.test$Species)/length(iris.test$Species)
+
+lda.accuracy
+```
+
+4)Logistic regression
+```{r}
+library(nnet)
+mulog.iris <- multinom(Species ~., data = iris.train)
+mulog.pred.iris <- predict(mulog.iris, iris.test)
+mulog.accuracy <- sum(mulog.pred.iris == iris.test$Species)/length(iris.test$Species)
+
+mulog.accuracy
+```
+
+Based on the results above, the accuracy rates of random forest, LDA, logistic regression model are 93.33%, 95.56% and 93.33%, therefore LDA model has the best performance in this case.

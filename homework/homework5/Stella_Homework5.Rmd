@@ -1,0 +1,201 @@
+---
+title: "STA 545 Statistical Data Mining I, Fall 2020"
+subtitle: "Homework 5"
+author: "Stella Liao"
+date: "October 7, 2020"
+output:
+  pdf_document:
+            latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. (25 points) Please use the datasets shown in Question 1 of your homework 4 to ﬁt a PLS model on the set A, with the parameter M chosen by the set B. Report the value of M selected by the set B, the estimated regression coeﬃcients of the original input variables, and the test error obtained. In addition, please ﬁt a lasso regression model on the set A, with the tuning parameter $\lambda\ chosen by the set B. Report the test error obtained, along with the the estimated regression coeﬃcients of the original input variables.
+
+1) Preparing data
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+library(ISLR)
+library(glmnet)
+library(pls)
+
+data(College)
+set.seed(123)
+train.num <- sample(777, size = 500, replace = FALSE)
+train.College <- College[train.num,]
+test.College <- College[-train.num,]
+
+set.seed(1)
+set.num <- sample(500, size = 250, replace = FALSE)
+set.A <- College[set.num,]
+set.B <- College[-set.num,]
+X.set.A <- model.matrix(Apps ~ .,set.A)
+X.set.B <- model.matrix(Apps ~ .,set.B)
+test.matrix.College <- model.matrix(Apps ~ .,test.College)
+grid <- 10 ^ seq(10, -2, length = 100)
+
+```
+
+2) PLS model
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+fit.PLS <- plsr(Apps ~ .,
+                data = set.B,
+                family = "gaussian",
+                scale = F,
+                validation = "CV")
+validationplot(fit.PLS,val.type = "MSEP")
+summary(fit.PLS)
+```
+
+According to the output of `summary(fit.pcr2)`, we find that when `ncomp` = 16, the cross validation error is lowest. 
+
+```{R echo=TRUE}
+fit.PLS2 <- pcr(Apps ~ .,
+                data = set.A,
+                family = "gaussian",
+                scale = F,
+                ncomp = 16)
+
+pred.PLS <- predict(fit.PLS2, 
+                    test.College,
+                    scale = F,
+                    ncomp = 16)
+
+# test error in PLS model
+test.error.PLS <- mean((pred.PLS - test.College$Apps)^2)
+test.error.PLS
+
+#the coefficients of the original outputs in the PLS model
+as.data.frame(fit.PLS2$coefficients[,,16])
+```
+
+3) Lasso regression model
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+lasso.mod <- glmnet(X.set.A,
+                    set.A$Apps,
+                    family = "gaussian",
+                    standardize = F,
+                    alpha = 1, 
+                    lambda = grid)
+
+cv.out = cv.glmnet(X.set.B,
+                   set.B$Apps,
+                   lambda = grid,
+                   standardize = F,
+                   alpha = 1)
+
+bestlam.B.lasso = cv.out$lambda.min
+bestlam.B.lasso
+
+lasso.pred = predict(lasso.mod, 
+                     s = bestlam.B.lasso, 
+                     newx = test.matrix.College) 
+
+# the test error in the lasso model
+mean((lasso.pred - test.College$Apps)^2) 
+
+#the coefficients of the original outputs in the lasso model
+lasso.coef = predict(lasso.mod, 
+                     type = "coefficients", 
+                     s = bestlam.B.lasso)
+lasso.coef
+```
+
+## Problem 2
+![](/Users/stella_liao/Nutstore\ Files/data\ mining/homework/homework5/question2.jpg)
+
+## Problem 3 (50 points) Please write your own R function for the coordinate descent algorithm to ﬁt lasso regression models. Please use the prostate cancer data to compare the results from your own R function with the results from the glmnet R function in the glmnet R package.
+
+### 1) using `glmnet()` function 
+```{r echo=TRUE}
+prostate <- read.csv("prostate.csv")
+# have a look at prostate data
+head(prostate, n = 2 )
+# standardizing prostate data to make sure its mean equal to 0 and variance equal to 1
+X.prostate = scale(as.matrix(prostate[,2:9]))
+y.prostate = scale(as.vector(prostate[,10]))
+
+set.seed(123)
+lasso.mod.prostate <- glmnet(X.prostate,
+                             y.prostate,
+                             intercept = F,
+                             standardize = T,
+                             family="gaussian",
+                             alpha = 1,
+                             lambda = grid)
+
+cv.out.prostate = cv.glmnet(X.prostate,
+                            y.prostate,
+                            alpha = 1,
+                            standardize = T,
+                            intercept = F,
+                            lambda = grid)
+
+bestlam.B.lasso.prostate = cv.out.prostate$lambda.min
+coef.lasso.prostate = predict(lasso.mod.prostate, type = "coefficients", s = bestlam.B.lasso.prostate)
+coef.lasso.prostate
+bestlam.B.lasso.prostate
+```
+### 2) using coordinate descent algorithm ^[1]^
+![](/Users/stella_liao/Nutstore\ Files/data\ mining/homework/homework5/question3.jpg)
+
+```{r}
+cd.lasso <- function(X, y, lambda = 0.1, max.iter = 1000,  tol = 1e-6 ){
+  
+  #to create soft-thresholding function
+  soft.thresholding <- function(b, l){
+    result = rep(0, length(b))
+    result[b >  l] = b[b > l] - l
+    result[b < -l] = b[b < -l] + l
+    result
+  }
+ 
+  #to create function to calculate beta k star
+  compute.bks <- function(k, X, y, beta, lambda){
+        y.predict = X %*% beta
+        rk = X[, k] %*% (y - y.predict+ X[, k] * beta[k])
+        rk = rk / nrow(X)
+        zk = colSums(X^2)[k]
+        zk = zk / nrow(X)
+        beta.k = soft.thresholding(rk, lambda)
+        beta.k = beta.k / zk
+        beta.k }
+  #initialize some parameters
+  tol.curr = 1
+  iter = 1 
+  all.beta = rep(0, ncol(X))
+  old.all.beta = rep(0, ncol(X))
+  
+  #update beta k
+  while (tol < tol.curr && iter < max.iter) {
+    for (k in 1:ncol(X)) {
+        old.all.beta[k] = all.beta[k]
+        all.beta[k] = compute.bks(k, X, y, all.beta, lambda)
+    }
+    tol.curr = abs(all.beta - old.all.beta)  
+    iter = iter + 1
+  }
+  #print all beta
+  all.beta
+}  
+
+coef.cd.lasso.prostate <- cd.lasso(X = X.prostate, 
+                                   y = y.prostate, 
+                                   lambda = bestlam.B.lasso.prostate,
+                                   tol = 1e-12)
+
+comparison <- data.frame("glmnet" = as.data.frame(summary(coef.lasso.prostate))$x,
+                         "coordinate descent" = coef.cd.lasso.prostate)
+
+predictors <- c("lcavol", "lweight", "age", "lbph", 'svi', "lcp" ,"gleason", "pgg45") 
+comparison <- cbind(predictors, comparison)
+
+comparison
+
+```
+We could see that the coefficients of those predictors in the two functions are almost same.
+
+## Reference
+[1] https://www.scutmath.com/coordiante_descent_for_lasso.html

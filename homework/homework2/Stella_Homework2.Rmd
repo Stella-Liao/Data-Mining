@@ -1,0 +1,125 @@
+---
+title: "STA 545 Statistical Data Mining I, Fall 2020"
+subtitle: "Homework 2"
+author: "Stella Liao"
+date: "September 15, 2020"
+output:
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. (40 points) The table below provides a training data set containing six observations, three predictors, and one qualitative response variable. Suppose we wish to use this data set to make a prediction for Y when X 1 = X 2 = X 3 = 0 using k-nearest neighbors.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
+library(dplyr)
+data1 <- as.data.frame(matrix(
+  c(1,0,3,0,2,2,0,0,3,0,1,3,4,0,1,2,5,-1,0,1,6,1,1,1),
+  ncol=4,
+  byrow=TRUE))%>%
+  cbind(c("Red","Red","Red","Green","Green","Red"))%>%
+  setNames(c("Obs.","X1","X2","X3","Y"))
+data1
+```
+
+### (a) Compute the Euclidean distance between each observation and the test point, X1 =  X2 = X3 = 0.    
+
+The answer is shown in the output of the following chunk. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+data1_eucDist <- data1%>% 
+  mutate(eucDist = sqrt(X1**2+X2**2+X3**2))
+
+data1_eucDist
+```
+### (b) What is our prediction with k = 1?  
+
+At this point, we should choose the nearest point, which is Obs.5. Therefore, our prediction should be 'Green'.
+
+### (c) What is our prediction with k = 3?  
+At this point, we should choose the average from the three nearest neighbors(Obs.5, 6 and 2). Therefore,our prediction should be 'Red'.
+
+### (d) Suppose we only use features X2 and X3. Please draw the decision boundary of the k-nearest neighbor classiﬁer with k = 1 in a ﬁgure.  
+
+The decision boundary is drawn with black ink in the output plot of the following chunk.
+
+```{r}
+library(ggplot2)
+data1 %>% 
+  ggplot(aes(X2, X3)) +
+  geom_point(aes(color = Y))+
+  scale_color_manual(values=c("#00ff00", "#ff0000"))
+```
+
+### (e) If the Bayes decision boundary in this problem is highly nonlinear, would we expect the best value for k to be large or small? Why?  
+With K increasing, the boundary becomes linear. Therefore, we would expect the best value for K to be small at this point.
+
+## 2. (60 points) Data for this question come from the handwritten ZIP codes on envelopes from U.S. postal mail. Each image is a segment from a ﬁve digit ZIP code, isolating a single digit. The images are 16×16 eight-bit grayscale maps, with each pixel ranging in intensity from 0 to 255. The images have been normalized to have approximately the same size and orientation. The task is to predict, from the 16×16 matrix of pixel intensities, the identity of each image (0, 1, . . . , 9) quickly and accurately. The zipcode data are available from the book website www-stat.stanford.edu/ElemStatLearn. Please consider only the 2’s and 3’s in the data.
+
+### (a) Fit a linear regression model where we code Y = 1 if the label of the image is 2, and Y = −1 if the label of the image is 3. Show both the training misclassiﬁcation error and test misclassiﬁcation error for this binary classiﬁcation problem.
+
+training misclassiﬁcation error = 0.09924689  
+test misclassiﬁcation error = 0.6066614
+
+```{r}
+train <- as.data.frame(read.table('zip.train.gz'))%>%
+  filter(V1 %in% c(2,3))%>%
+  mutate(Y = replace(V1, V1==2, 1))%>%
+  mutate(Y = replace(Y, V1==3, -1))%>%
+  subset(select = -V1)
+
+test <- as.data.frame(read.table('zip.test.gz'))%>%
+  filter(V1 %in% c(2,3))%>%
+  mutate(Y = replace(V1, V1==2, 1))%>%
+  mutate(Y = replace(Y, V1==3, -1))%>%
+  subset(select = -V1)
+
+lm.fit <- lm( Y ~ .,train)
+lm.prediction = predict(lm.fit, newdata = test[,1:256])
+training_misclassiﬁcation_error <- mean(lm.fit$residuals^2)
+test_misclassiﬁcation_error <- mean((lm.prediction-test$Y)^2)
+
+training_misclassiﬁcation_error
+test_misclassiﬁcation_error
+```
+### (b) Consider the k-nearest neighbor classiﬁers with k = 1, 3, 5, 7 and 15. Show both the training error and test error for each choice.
+
+The answer is shown in the output of the following chunk.
+
+```{r}
+library(class)
+
+n.K=15
+
+train.error=rep(NA,n.K)
+test.error=rep(NA,n.K)
+
+# Calculate the training error and test error for each K
+for(i in 1:n.K){
+  knn.pred=knn(train = train[,1:256], 
+               test = test[,1:256], 
+               cl = train[,257], k = i)
+  test.error[i]=mean(knn.pred!=test[,257])
+  
+  knn.train=knn(train = train[,1:256], 
+                test = train[,1:256], 
+                cl = train[,257], k = i)
+  train.error[i]=mean(knn.train!=train[,257])
+}
+
+errors <- matrix(ncol = 3, nrow = 8)
+for (i in 1:8){
+  j = 2 * i -1
+  errors[i,1] <- j
+  errors[i,2] <- train.error[j]
+  errors[i,3] <- test.error[j]
+}
+errors <- as.data.frame(errors)%>%
+  setNames(c("K","Train error","Test error"))%>%
+  filter( K %in% c(1,3,5,7,15))
+errors  
+```
+
