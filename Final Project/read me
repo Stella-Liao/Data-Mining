@@ -1,4 +1,13 @@
 This project is conducted by Sean Knipe and Stella Liao, Sean is responsible for linear regression part and Stella is resposible for non-linear regression part.
+
+You can find more detials about this project through https://docs.google.com/presentation/d/1Qbd4mfWTQW8szqZ9jDZOmQea_BPwXPj9a8Uewg4sHdc/edit#slide=id.p
+
 data cleaning.R file is the codes used to tidy data
+
 random forest regression.R file is the codes used to build random forest regression model
+
 neural network regression.R file is the codes used to build neural network regression model
+
+Sector folder stores the shapefile of the study area
+
+Wales folder stores the crime data in the Wales, UK from November 2017 to October 2020
